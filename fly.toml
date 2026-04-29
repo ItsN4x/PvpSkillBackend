@@ -1,25 +1,31 @@
-app = "pvpskill-backend"
-primary_region = "fra"
+# fly.toml app configuration file generated for pvpskillbackend on 2026-04-29T16:31:43Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'pvpskillbackend'
+primary_region = 'ams'
 
 [build]
 
 [env]
-  HOST = "0.0.0.0"
-  PORT = "8080"
-  DATA_DIR = "/data"
+  DATA_DIR = '/data'
+  HOST = '0.0.0.0'
+  PORT = '8080'
 
 [[mounts]]
-  source = "pvpskill_data"
-  destination = "/data"
+  source = 'pvpskill_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 1
 
 [[vm]]
-  memory = "512mb"
-  cpu_kind = "shared"
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
