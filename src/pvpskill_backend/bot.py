@@ -80,15 +80,35 @@ class PvpSkillBot(discord.Client):
         self._register_commands()
 
     async def setup_hook(self) -> None:
-        if settings.discord_guild_id:
-            guild = discord.Object(id=settings.discord_guild_id)
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-        else:
-            await self.tree.sync()
+        try:
+            if settings.discord_guild_id:
+                guild = discord.Object(id=settings.discord_guild_id)
+                self.tree.copy_global_to(guild=guild)
+                await self.tree.sync(guild=guild)
+                log.info("synced commands to guild %s", settings.discord_guild_id)
+            else:
+                await self.tree.sync()
+                log.info("synced commands globally")
+        except discord.HTTPException as exc:
+            log.warning(
+                "command sync failed (%s) — bot likely not in target guild yet; "
+                "commands will sync once it joins",
+                exc,
+            )
 
     async def on_ready(self) -> None:
         log.info("logged in as %s (id=%s)", self.user, getattr(self.user, "id", "?"))
+        log.info("currently in %d guilds", len(self.guilds))
+        for g in self.guilds:
+            log.info("  guild: %r id=%s", g.name, g.id)
+
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        log.info("joined guild %r id=%s — re-syncing commands", guild.name, guild.id)
+        try:
+            self.tree.copy_global_to(guild=discord.Object(id=guild.id))
+            await self.tree.sync(guild=discord.Object(id=guild.id))
+        except discord.HTTPException as exc:
+            log.warning("guild sync failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Command registration
