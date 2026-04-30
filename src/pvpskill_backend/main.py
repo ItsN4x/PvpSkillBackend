@@ -42,7 +42,14 @@ async def run() -> None:
     bot = None
     if settings.discord_bot_token:
         bot = make_bot(db=db, mctiers=mctiers, verify=verify_store)
-        bot_task = asyncio.create_task(bot.start(settings.discord_bot_token), name="discord-bot")
+
+        async def _run_bot() -> None:
+            try:
+                await bot.start(settings.discord_bot_token)
+            except Exception:
+                log.exception("discord bot crashed; HTTP API will keep serving")
+
+        bot_task = asyncio.create_task(_run_bot(), name="discord-bot")
     else:
         log.warning("DISCORD_BOT_TOKEN not set — Discord bot disabled (API only)")
 
@@ -67,18 +74,17 @@ async def run() -> None:
         except NotImplementedError:
             pass
 
-    tasks: list[asyncio.Task] = [api_task]
-    if bot_task is not None:
-        tasks.append(bot_task)
-
     stop_task = asyncio.create_task(stop_event.wait(), name="stop-wait")
 
+    # Process lifetime is governed by the HTTP server + signal handler.
+    # The bot task is best-effort: if it crashes, _run_bot() catches and the
+    # task ends, but we keep serving the API.
     try:
         done, _ = await asyncio.wait(
-            [*tasks, stop_task], return_when=asyncio.FIRST_COMPLETED
+            [api_task, stop_task], return_when=asyncio.FIRST_COMPLETED
         )
         for t in done:
-            exc = t.exception()
+            exc = t.exception() if not t.cancelled() else None
             if exc is not None:
                 log.error("task %s failed: %s", t.get_name(), exc)
     finally:
@@ -86,8 +92,8 @@ async def run() -> None:
         server.should_exit = True
         if bot is not None and not bot.is_closed():
             await bot.close()
-        for t in tasks:
-            if not t.done():
+        for t in (api_task, bot_task):
+            if t is not None and not t.done():
                 t.cancel()
                 try:
                     await t
